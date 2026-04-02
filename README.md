@@ -1,16 +1,38 @@
-# React + Vite
+# Planeat - Dual-Role MVP
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Planeat is a mobile-first, dual-role SaaS application bringing food businesses and customers together. It specializes in reducing institutional demand forecasting errors and subsequent food waste by providing live insights, order matching, and intuitive financial modeling.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Dual-Role Capabilities**: Seamlessly transition between **Customer** interfaces (for finding dynamic discounts and tracking orders) and **Business Owner** interfaces (for managing orders, tweaking menus, and reviewing analytics).
+- **Executive Demand Dashboard**: Owners have access to multi-day timeframe selections predicting food demand directly alongside financial estimations.
+- **Instagram-style Chat**: Intuitive real-time mock communication between buyers and providers to arrange pickups and answer questions.
+- **Blinkit-style Profile**: Location and delivery tracking metrics.
+- **Glassmorphism Theme**: Fully customized responsive CSS utilizing layered gradients.
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend**: React (v19) + Vite
+- **Routing**: React Router (v7)
+- **Styling**: Vanilla CSS (Mobile-first, Dark Theme)
+- **Backend / API**: Node.js & Express
+- **Database**: SQLite3
 
-## Expanding the ESLint configuration
+## Getting Started
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+To run the application locally on your machine:
+
+1. Copy repository and prepare dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Start the Application:
+   ```bash
+   npm start
+   ```
+
+3. Open your browser and navigate to the frontend:
+   **http://localhost:5173**
+
+*(Note: The backend Express server runs concurrently on port 3001 using `nodemon` or standard node context. Local mock databases will re-seed immediately on start if missing.)*

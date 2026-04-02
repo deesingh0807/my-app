@@ -1,38 +1,59 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import Auth from './components/Auth';
+import BottomNav from './components/BottomNav';
+import TopBar from './components/TopBar';
 
-// Layout Components
-import Sidebar from './components/Sidebar';
-import Navbar from './components/Navbar';
-
-// Pages
-import Dashboard from './pages/Dashboard';
-import HistoryReports from './pages/HistoryReports';
-import DemandTracking from './pages/DemandTracking';
-import MessagesAlerts from './pages/MessagesAlerts';
+// 4 Core pages will be imported here
+import Home from './pages/Home';
+import Messages from './pages/Messages';
+import Orders from './pages/Orders';
 import Profile from './pages/Profile';
-import Settings from './pages/Settings';
+
+function AppRoutes() {
+  const { user } = useAuth();
+
+  if (!user) {
+    return <Auth />;
+  }
+
+  // Get Page Title based on route
+  const getPageTitle = (path) => {
+    if (path.includes('messages')) return 'Messages';
+    if (path.includes('orders')) return 'Orders';
+    if (path.includes('profile')) return 'Profile';
+    return 'Home';
+  };
+
+  return (
+    <BrowserRouter>
+      <div className="app-container">
+        <Routes>
+          <Route path="*" element={<TopBar title={getPageTitle(window.location.pathname)} />} />
+        </Routes>
+        
+        <div className="page-content">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/orders" element={<Orders />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </div>
+        
+        <BottomNav />
+      </div>
+    </BrowserRouter>
+  );
+}
 
 function App() {
   return (
-    <BrowserRouter>
-      <div className="app-layout">
-        <Sidebar />
-        <div className="main-area">
-          <Navbar />
-          <div className="page-content">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/history" element={<HistoryReports />} />
-              <Route path="/tracking" element={<DemandTracking />} />
-              <Route path="/messages" element={<MessagesAlerts />} />
-              <Route path="/profile" element={<Profile />} />
-              <Route path="/settings" element={<Settings />} />
-            </Routes>
-          </div>
-        </div>
-      </div>
-    </BrowserRouter>
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   );
 }
 

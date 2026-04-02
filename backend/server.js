@@ -6,105 +6,115 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// --- DASHBOARD RECORDS ---
-app.get('/api/dashboard', (req, res) => {
-    db.all('SELECT * FROM daily_records ORDER BY date ASC', [], (err, rows) => {
+// --- AUTH (MOCK) ---
+app.post('/api/login', (req, res) => {
+    const { role } = req.body;
+    db.get('SELECT * FROM users WHERE role = ? LIMIT 1', [role], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        if (!row) return res.status(404).json({ error: 'User not found for role' });
+        res.json(row);
     });
 });
 
-app.post('/api/records', (req, res) => {
-    const { date, totalCustomers, mealsPrepared, weatherCondition, eventFlag } = req.body;
-    const mealsWasted = Math.max(0, mealsPrepared - totalCustomers);
-    
-    const stmt = db.prepare(`INSERT INTO daily_records (date, total_customers, meals_prepared, meals_wasted, weather_condition, event_flag)
-                             VALUES (?, ?, ?, ?, ?, ?)
-                             ON CONFLICT(date) DO UPDATE SET
-                             total_customers=excluded.total_customers,
-                             meals_prepared=excluded.meals_prepared,
-                             meals_wasted=excluded.meals_wasted,
-                             weather_condition=excluded.weather_condition,
-                             event_flag=excluded.event_flag`);
-                             
-    stmt.run(date, totalCustomers, mealsPrepared, mealsWasted, weatherCondition, eventFlag ? 1 : 0, function(err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ success: true, id: this.lastID });
-    });
-});
-
-// --- SETTINGS (Financial Configuration) ---
-app.get('/api/settings', (req, res) => {
-    db.get('SELECT * FROM settings LIMIT 1', [], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(row || { cost_per_meal: 40, price_per_meal: 80, waste_threshold: 10 });
-    });
-});
-
-app.put('/api/settings', (req, res) => {
-    const { cost_per_meal, price_per_meal, waste_threshold } = req.body;
-    db.run(`UPDATE settings SET cost_per_meal = ?, price_per_meal = ?, waste_threshold = ? WHERE id = 1`, 
-        [cost_per_meal, price_per_meal, waste_threshold], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        });
-});
-
-// --- USER PROFILE ---
-app.get('/api/user', (req, res) => {
-    db.get('SELECT * FROM users LIMIT 1', [], (err, row) => {
+app.get('/api/users/:id', (req, res) => {
+    const { id } = req.params;
+    db.get('SELECT * FROM users WHERE id = ?', [id], (err, row) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(row);
     });
 });
 
-app.put('/api/user', (req, res) => {
-    const { name, role, organization } = req.body;
-    db.run(`UPDATE users SET name = ?, role = ?, organization = ? WHERE id = 1`, 
-        [name, role, organization], function(err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ success: true });
-        });
-});
-
-// --- ALERTS ---
-app.get('/api/alerts', (req, res) => {
-    db.all('SELECT * FROM alerts ORDER BY created_at DESC', [], (err, rows) => {
+// --- STORES ---
+app.get('/api/stores', (req, res) => {
+    db.all(`SELECT stores.*, users.name as owner_name, users.avatar_url as owner_avatar 
+            FROM stores JOIN users ON stores.owner_id = users.id`, [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
 
-// --- PROFIT SIMULATOR ---
-app.post('/api/simulate', (req, res) => {
-    const { predictedCustomers, mealsPrepared } = req.body;
-    
-    // Fetch current settings to perform calculation
-    db.get('SELECT cost_per_meal, price_per_meal FROM settings LIMIT 1', [], (err, row) => {
-        if (err || !row) return res.status(500).json({ error: "Missing settings" });
-        
-        const costPerMeal = row.cost_per_meal;
-        const pricePerMeal = row.price_per_meal;
+app.get('/api/stores/:ownerId', (req, res) => {
+    const { ownerId } = req.params;
+    db.get('SELECT * FROM stores WHERE owner_id = ? LIMIT 1', [ownerId], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(row);
+    });
+});
 
-        let wasteCost = 0;
-        let lostRevenue = 0;
-        
-        if (mealsPrepared > predictedCustomers) {
-            wasteCost = (mealsPrepared - predictedCustomers) * costPerMeal;
-        } else if (predictedCustomers > mealsPrepared) {
-            lostRevenue = (predictedCustomers - mealsPrepared) * (pricePerMeal - costPerMeal);
-        }
+// --- ORDERS ---
+app.get('/api/orders', (req, res) => {
+    const { customerId, ownerId } = req.query;
+    let query = '';
+    let params = [];
 
-        const revenue = Math.min(predictedCustomers, mealsPrepared) * pricePerMeal;
-        const totalCost = mealsPrepared * costPerMeal;
-        const netProfit = revenue - totalCost;
+    if (customerId) {
+        query = `SELECT orders.*, stores.name as store_name, delivery_agents.name as agent_name, delivery_agents.rating as agent_rating 
+                 FROM orders 
+                 JOIN stores ON orders.store_id = stores.id 
+                 LEFT JOIN delivery_agents ON orders.delivery_agent_id = delivery_agents.id
+                 WHERE orders.customer_id = ? ORDER BY orders.timestamp DESC`;
+        params.push(customerId);
+    } else if (ownerId) {
+        query = `SELECT orders.*, users.name as customer_name, users.avatar_url as customer_avatar
+                 FROM orders 
+                 JOIN stores ON orders.store_id = stores.id 
+                 JOIN users ON orders.customer_id = users.id
+                 WHERE stores.owner_id = ? ORDER BY orders.timestamp DESC`;
+        params.push(ownerId);
+    } else {
+        return res.status(400).json({ error: 'Missing customerId or ownerId' });
+    }
 
-        res.json({
-            wasteCost,
-            lostRevenue,
-            netProfit,
-            revenue,
-            totalCost
+    db.all(query, params, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.put('/api/orders/:id/status', (req, res) => {
+    const { id } = req.params;
+    const { status } = req.body;
+    db.run('UPDATE orders SET status = ? WHERE id = ?', [status, id], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ success: true });
+    });
+});
+
+// --- MESSAGES ---
+app.get('/api/messages/:userId', (req, res) => {
+    const { userId } = req.params;
+    db.all(`SELECT messages.*, 
+            sender.name as sender_name, sender.avatar_url as sender_avatar, sender.role as sender_role,
+            receiver.name as receiver_name, receiver.avatar_url as receiver_avatar, receiver.role as receiver_role
+            FROM messages 
+            JOIN users as sender ON messages.sender_id = sender.id 
+            JOIN users as receiver ON messages.receiver_id = receiver.id 
+            WHERE sender_id = ? OR receiver_id = ? ORDER BY timestamp ASC`, [userId, userId], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
+app.post('/api/messages', (req, res) => {
+    const { senderId, receiverId, content } = req.body;
+    const timestamp = new Date().toISOString();
+    db.run('INSERT INTO messages (sender_id, receiver_id, content, timestamp, status) VALUES (?, ?, ?, ?, ?)',
+        [senderId, receiverId, content, timestamp, 'sent'], function(err) {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({ success: true, id: this.lastID, timestamp });
+        });
+});
+
+// --- FINANCIAL STATS ---
+app.get('/api/stats/:ownerId', (req, res) => {
+    const { ownerId } = req.params;
+    db.get('SELECT id FROM stores WHERE owner_id = ? LIMIT 1', [ownerId], (err, store) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!store) return res.status(404).json({ error: 'Store not found' });
+
+        db.all('SELECT * FROM financial_data WHERE store_id = ? ORDER BY date DESC LIMIT 7', [store.id], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
         });
     });
 });
